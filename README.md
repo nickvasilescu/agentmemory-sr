@@ -247,17 +247,23 @@ What this means in practice: a memory graded "good" five times might go from rev
 
 Search results are ranked by `relevance x retrievability`. A highly relevant but decaying memory surfaces for reinforcement. Strong but irrelevant memories stay quiet. This is the key difference from flat vector search — the system doesn't just find matches, it finds matches that need attention.
 
-### Context Injection
+### Context Injection (Dual-Queue)
 
-At session start, the top 15 memories (ranked by strength) are injected into the agent's context with strength indicators:
+At session start, memories are injected into the agent's context using two queues — mirroring how Anki separates learning cards from review cards:
+
+**Learning queue** — memories in `new`, `learning`, or `relearning` state are always shown. New memories need to be seen to build strength; hiding them until they're strong creates a chicken-and-egg problem.
+
+**Review queue** — graduated memories (`review` state) compete by strength. Top 15 by `stability × usage × state_bonus`.
 
 ```
-- (id:abc123) [preferences] Nick prefers short emails (strong)
-- (id:def456) [business] Orgo MRR is $25K (fading)
-- (id:ghi789) [family] Mom's birthday is Feb 15 (weak)
+- (id:abc123) [family] Brother's name is Matthew (new)
+- (id:def456) [preferences] Nick prefers short emails (strong)
+- (id:ghi789) [business] Orgo MRR is $25K (fading)
 ```
 
-Strong = retrievability > 80%. Fading = 50-80%. Weak = below 50%. The agent sees what it knows and how confident it should be.
+Labels: `new` = never graded, `learning` = graded but not graduated, `strong` = retrievability > 80%, `fading` = 50-80%, `weak` = below 50%.
+
+After a memory gets graded "good" twice, it graduates from the learning queue to the review queue and competes on strength like everything else.
 
 ### Contradiction Detection
 

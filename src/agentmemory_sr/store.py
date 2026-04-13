@@ -256,18 +256,40 @@ class MemoryStore:
         return all_memories[:n]
 
     def system_prompt(self) -> str:
-        """Generate a system prompt block describing available memories.
+        """Generate a system prompt block with dual-queue memory injection.
 
-        Inject this into the agent's context so it knows what it remembers.
+        Mirrors Anki's architecture: learning-phase memories are always shown
+        (they need to be seen to build strength), while review-phase memories
+        compete by strength. Without this split, new memories score 0.0 in
+        the strength ranking and are invisible until graded multiple times.
         """
+        all_active = self.db.get_all_active_memories()
+
+        # Learning queue: ungraduated memories — always shown
+        learning = [m for m in all_active
+                    if m.state in (MemoryState.NEW, MemoryState.LEARNING, MemoryState.RELEARNING)]
+        learning.sort(key=lambda m: m.created_at, reverse=True)
+        learning = learning[:10]
+        learning_ids = {m.id for m in learning}
+
+        # Review queue: graduated memories ranked by strength
         top = self.top_memories(n=15)
-        if not top:
+        top = [m for m in top if m.id not in learning_ids]
+
+        if not top and not learning:
             return ""
 
         lines = ["## Active Memory (spaced repetition)", ""]
         lines.append("IMPORTANT: After using ANY memory below to answer a question, grade it:")
         lines.append("`agentmemory --db ~/.agentmemory/memory.db grade <id> good`")
         lines.append("")
+
+        if learning:
+            for m in learning:
+                state_label = "new" if m.state == MemoryState.NEW else "learning"
+                lines.append(f"- (id:{m.id}) [{m.namespace}] {m.content} ({state_label})")
+            lines.append("")
+
         for m in top:
             r = get_retrievability(self.scheduler, m)
             strength = "strong" if r > 0.8 else "fading" if r > 0.5 else "weak"
