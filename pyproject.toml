@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentmemory-sr"
+version = "0.1.0"
+description = "Spaced repetition memory for AI agents. FSRS-6 scheduling in a SQLite file."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    {name = "Nick Vasilescu"},
+]
+keywords = ["ai", "agents", "memory", "spaced-repetition", "fsrs", "anki"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "fsrs>=6.0.0",
+    "pydantic>=2.0.0",
+    "click>=8.0.0",
+]
+
+[project.scripts]
+agentmemory = "agentmemory_sr.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/orgo-ai/agentmemory-sr"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agentmemory_sr = ["skill.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
