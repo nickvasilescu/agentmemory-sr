@@ -20,11 +20,13 @@ def get_store(db: str) -> MemoryStore:
 
 @click.group()
 @click.option("--db", default=DEFAULT_DB, envvar="AGENTMEMORY_DB", help="Path to memory database.")
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Suppress JSON output. Exit code only.")
 @click.pass_context
-def cli(ctx, db):
+def cli(ctx, db, quiet):
     """Spaced repetition memory for AI agents."""
     ctx.ensure_object(dict)
     ctx.obj["db"] = db
+    ctx.obj["quiet"] = quiet
 
 
 @cli.command()
@@ -36,7 +38,8 @@ def add(ctx, content, namespace, source):
     """Store a new memory."""
     store = get_store(ctx.obj["db"])
     memory = store.add(content, namespace=namespace, source=source)
-    click.echo(json.dumps({"id": memory.id, "content": memory.content, "namespace": memory.namespace}))
+    if not ctx.obj["quiet"]:
+        click.echo(json.dumps({"id": memory.id, "content": memory.content, "namespace": memory.namespace}))
     store.close()
 
 
@@ -75,15 +78,39 @@ def grade(ctx, memory_id, grade, context):
     store = get_store(ctx.obj["db"])
     try:
         memory = store.grade(memory_id, grade, context=context)
-        click.echo(json.dumps({
-            "id": memory.id,
-            "grade": grade,
-            "state": memory.state.value,
-            "stability": round(memory.stability, 2) if memory.stability else None,
-            "next_due": memory.due.isoformat(),
-        }))
+        if not ctx.obj["quiet"]:
+            click.echo(json.dumps({
+                "id": memory.id,
+                "grade": grade,
+                "state": memory.state.value,
+                "stability": round(memory.stability, 2) if memory.stability else None,
+                "next_due": memory.due.isoformat(),
+            }))
     except ValueError as e:
         click.echo(json.dumps({"error": str(e)}), err=True)
+    store.close()
+
+
+@cli.command("grade-batch")
+@click.argument("grades", nargs=-1, required=True)
+@click.pass_context
+def grade_batch(ctx, grades):
+    """Grade multiple memories at once. Each arg is id:grade (e.g. abc123:good def456:easy)."""
+    store = get_store(ctx.obj["db"])
+    results = []
+    errors = []
+    for entry in grades:
+        if ":" not in entry:
+            errors.append({"input": entry, "error": "format must be id:grade"})
+            continue
+        memory_id, g = entry.split(":", 1)
+        try:
+            memory = store.grade(memory_id, g)
+            results.append({"id": memory.id, "grade": g, "state": memory.state.value})
+        except ValueError as e:
+            errors.append({"id": memory_id, "error": str(e)})
+    if not ctx.obj["quiet"]:
+        click.echo(json.dumps({"graded": len(results), "errors": len(errors), "results": results, "error_details": errors}))
     store.close()
 
 
@@ -102,13 +129,14 @@ def review(ctx):
             "state_after": r.state_after.value,
             "stability_after": round(r.stability_after, 2) if r.stability_after else None,
         })
-    click.echo(json.dumps({"reviewed": len(results), "results": output}, indent=2))
+    if not ctx.obj["quiet"]:
+        click.echo(json.dumps({"reviewed": len(results), "results": output}, indent=2))
     store.close()
 
 
 @cli.command()
 @click.option("--n", default=20, help="Number of top memories.")
-@click.option("--namespace", "-ns", default=None, help="Filter by namespace.")
+@click.option("--namespace", "-n", default=None, help="Filter by namespace.")
 @click.pass_context
 def top(ctx, n, namespace):
     """Get top-N strongest memories for context injection."""
