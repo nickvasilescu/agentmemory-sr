@@ -190,6 +190,8 @@ class MemoryDB:
         return self._row_to_memory(row)
 
     def delete_memory(self, memory_id: str):
+        self.conn.execute("DELETE FROM grade_history WHERE memory_id=?", (memory_id,))
+        self.conn.execute("DELETE FROM review_log WHERE memory_id=?", (memory_id,))
         self.conn.execute("DELETE FROM memories WHERE id=?", (memory_id,))
         self.conn.commit()
 
