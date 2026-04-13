@@ -75,9 +75,51 @@ agentmemory prompt
 agentmemory install-skill ~/.openclaw/skills/
 ```
 
-### Agent Skill
+### Agent Skill + Session Hook (Claude Code)
 
-The package ships with a skill file that teaches agents when and how to use memory — when to store, when to grade, what the grades mean, how to handle leeches. Install it into any agent's skill directory:
+The package ships with a skill file that teaches agents when and how to use memory. For Claude Code, the full setup is:
+
+**1. Install the skill:**
+
+```bash
+mkdir -p ~/.claude/skills/agentmemory-sr
+agentmemory install-skill ~/.claude/skills/agentmemory-sr/
+# Rename to SKILL.md (Claude Code convention)
+mv ~/.claude/skills/agentmemory-sr/agentmemory-sr.md ~/.claude/skills/agentmemory-sr/SKILL.md
+```
+
+**2. Add the SessionStart hook** to `~/.claude/settings.json`:
+
+This auto-injects your memories into context at the start of every session. Without it, Claude won't know what it remembers.
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "DB=\"$HOME/.agentmemory/memory.db\"; agentmemory --db \"$DB\" review >/dev/null 2>&1; MEMORIES=$(agentmemory --db \"$DB\" prompt 2>/dev/null); if [ -n \"$MEMORIES\" ]; then python3 -c \"import json,sys; m=sys.stdin.read(); print(json.dumps({'hookSpecificOutput':{'hookEventName':'SessionStart','additionalContext':m}}))\" <<< \"$MEMORIES\"; fi",
+            "timeout": 10,
+            "statusMessage": "Loading spaced repetition memory..."
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Merge this into your existing settings.json — don't replace the whole file.
+
+**3. (Optional) Add a CLAUDE.md rule** for stronger enforcement:
+
+```markdown
+- **Spaced repetition memory (`agentmemory-sr`) is your primary memory system.** Personal facts, preferences, dates, people context, and project decisions go in SR memory via `agentmemory add`, NOT in auto-memory MEMORY.md files. When you answer a question using an SR memory, you MUST grade it (`agentmemory grade <id> good`). When the user teaches you something new, store it with `agentmemory add`. When the user corrects you, grade the old memory `again` and store the correction.
+```
+
+**For other agents:**
 
 ```bash
 agentmemory install-skill ~/.openclaw/skills/   # OpenClaw

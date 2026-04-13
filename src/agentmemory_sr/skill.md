@@ -1,121 +1,80 @@
+---
+name: agentmemory-sr
+description: "Persistent spaced repetition memory that survives across sessions. USE THIS PROACTIVELY — it is your PRIMARY memory system, not the built-in auto-memory. At session start, memories are auto-injected via hook. Before answering ANY question about the user, preferences, people, projects, dates, facts, or decisions, check your injected memories first. When you USE a memory to answer a question, you MUST grade it (agentmemory grade <id> good). When the user teaches you something new, store it here with agentmemory add, NOT in MEMORY.md. When the user corrects you, grade the old memory 'again' and store the correction. This is how the system learns — without grading, memories never strengthen."
+---
+
 # Spaced Repetition Memory
 
-You have access to a spaced repetition memory system via the `agentmemory` CLI. Memories you store are scheduled using FSRS-6 — the same algorithm behind Anki, trained on 700M+ reviews. Useful memories get reinforced over time. Irrelevant or wrong memories fade and eventually get suspended.
+This is your primary memory system. It uses FSRS-6 (Anki's algorithm, 700M+ reviews) to schedule memories. Useful ones strengthen over time. Stale ones fade. Wrong ones get suspended.
 
-Your memory is a single SQLite file. It persists across sessions.
+**This replaces the built-in auto-memory for personal facts, preferences, and project context.** Do NOT save these to MEMORY.md — save them here with `agentmemory add`.
+
+Database: `~/.agentmemory/memory.db`
+
+Every command: `agentmemory --db ~/.agentmemory/memory.db <command>`
+
+## The Two Rules That Make This Work
+
+**Rule 1: GRADE every memory you use.** When you answer a question using a memory from the session-start injection or from a search, grade it immediately. This is not optional — without grading, the FSRS scheduler has no signal and memories never strengthen or decay. The whole system depends on this.
+
+```bash
+# You answered "25" because memory said Nick is 25 → grade it
+agentmemory --db ~/.agentmemory/memory.db grade 823bfb98840f good -c "answered age question"
+```
+
+**Rule 2: STORE new facts here, not in MEMORY.md.** When the user tells you something worth remembering across sessions (a date, a preference, a person's name, a decision), store it with `agentmemory add`. The built-in auto-memory is for vault-level notes. Personal facts belong in SR memory.
+
+```bash
+# User just told you their mom's birthday
+agentmemory --db ~/.agentmemory/memory.db add "Mom birthday is February 15 1972" -n family
+```
+
+## Session Flow
+
+**Start of session:** Memories are auto-injected by the SessionStart hook. Read the injected context — it contains your top memories with strength indicators (strong/fading/weak). You already know things.
+
+**User asks a question:**
+1. Check your injected memories first
+2. If you find the answer → respond, then **grade the memory good** (or easy if user confirms)
+3. If not found → search: `agentmemory --db ~/.agentmemory/memory.db search "query" --top-k 5`
+4. If search finds it → respond, then **grade it**
+5. If nothing → fall back to vault grep. If you find the answer, **store it** with `agentmemory add`
+
+**User teaches you something new:**
+1. Store it: `agentmemory --db ~/.agentmemory/memory.db add "the fact" -n namespace`
+2. Grade it good immediately (you just learned it, it's fresh)
+
+**User corrects you:**
+1. Grade the wrong memory: `agentmemory --db ~/.agentmemory/memory.db grade <id> again -c "user corrected"`
+2. Store the correction: `agentmemory --db ~/.agentmemory/memory.db add "corrected fact" -n namespace`
+3. Contradiction detection auto-demotes the old one
 
 ## Commands
 
 ```bash
-agentmemory add "fact or preference" --namespace general
-agentmemory search "query" --top-k 5
-agentmemory grade <memory_id> again|hard|good|easy
-agentmemory review
-agentmemory top --n 20
-agentmemory health
-agentmemory prompt
+agentmemory --db ~/.agentmemory/memory.db add "fact" -n namespace
+agentmemory --db ~/.agentmemory/memory.db search "query" --top-k 5
+agentmemory --db ~/.agentmemory/memory.db grade <id> good|again|hard|easy -c "reason"
+agentmemory --db ~/.agentmemory/memory.db review
+agentmemory --db ~/.agentmemory/memory.db health
 ```
 
-## When to Store
+## Grading Reference
 
-Store a memory when you learn something that will be useful in future conversations:
+| What happened | Grade | Effect |
+|---------------|-------|--------|
+| Used the memory, it was correct | `good` | Stability grows, interval extends |
+| User explicitly confirmed ("yes exactly") | `easy` | Big stability boost |
+| Retrieved but wasn't useful for this task | `hard` | Small growth, shorter interval |
+| Memory was wrong or user corrected it | `again` | Stability resets, relearning |
 
-- User preferences: "prefers short emails", "hates bullet points", "uses dark mode"
-- Project facts: "MRR is $25K", "deadline is April 15", "using PostgreSQL 16"
-- Relationship context: "reports to Sarah", "new to the team", "expert in React"
-- Decisions: "chose Stripe over Paddle", "moving to monorepo", "using FSRS not SM-2"
-- Corrections: when the user corrects you, store the correct version
+## Namespaces
 
-```bash
-agentmemory add "User prefers tabs over spaces" --namespace preferences
-agentmemory add "Project deadline is 2026-04-15" --namespace project --source "docs/timeline.md"
-```
+preferences, business, team, user, family, technical, project, research, travel, infrastructure
 
-Use `--source` when the memory came from a specific file. The review cycle will check if the file still exists.
+## What NOT to Store Here
 
-## When to Retrieve
-
-Before generating a response, search for relevant context:
-
-```bash
-agentmemory search "email drafting preferences"
-agentmemory search "project architecture" --namespace project
-```
-
-Results are ranked by `relevance × retrievability`. Decaying memories surface for reinforcement. Strong irrelevant memories stay quiet.
-
-## When and How to Grade
-
-**Grade every memory you retrieve.** This is how the system learns.
-
-| Situation | Grade | Example |
-|-----------|-------|---------|
-| Memory was correct and you used it | `good` | Used "prefers short emails" to draft a concise reply |
-| User explicitly confirmed the memory | `easy` | User said "yes exactly, keep it brief" |
-| Memory was retrieved but wasn't useful for this task | `hard` | "Prefers dark mode" surfaced for an email task |
-| Memory was wrong, outdated, or user corrected it | `again` | User said "actually MRR is $30K now" |
-
-```bash
-agentmemory grade abc123 good
-agentmemory grade def456 again --context "user corrected: MRR is now $30K"
-```
-
-After grading "again", update the memory:
-```bash
-agentmemory add "MRR is $30K as of April 2026" --namespace business
-```
-
-The old memory will be automatically demoted via contradiction detection.
-
-## When to Review
-
-Run the review cycle during idle time, at session start, or on a schedule:
-
-```bash
-agentmemory review
-```
-
-This processes all due memories: checks source files, grades based on usage recency, detects leeches. You don't need to do anything manually — just run it periodically.
-
-## Understanding Memory States
-
-| State | Meaning |
-|-------|---------|
-| `new` | Just stored, not yet graded |
-| `learning` | In early review cycle, graded once or twice |
-| `review` | Graduated — on a spaced schedule. The happy path. |
-| `relearning` | Failed a review (graded "again"), back to short intervals |
-| `suspended` | Leech — failed 8+ times. Needs investigation or deletion. |
-
-## Leech Detection
-
-If a memory keeps getting graded "again" (8+ times), it's suspended as a leech. This means the information is volatile or the memory is poorly formed. When you see a leech:
-
-1. Check if the information is still relevant
-2. If yes, rephrase and store a new, clearer version
-3. If no, leave it suspended (it won't surface again)
-
-## Health Check
-
-```bash
-agentmemory health
-```
-
-Shows total memories, counts by state, leeches, due count, average retention. Use this to understand your memory quality over time.
-
-## Context Injection
-
-At session start, inject your strongest memories into context:
-
-```bash
-agentmemory prompt
-```
-
-This returns a formatted block of your top memories with strength indicators (strong/fading/weak). Add this to your system prompt.
-
-## Principles
-
-1. **Grade honestly.** "Again" is not punishment — it triggers relearning. Dishonest grades corrupt your scheduling.
-2. **Store selectively.** Not everything is worth remembering. If it's in a file you can read, you may not need to memorize it.
-3. **Review regularly.** The review cycle is how stale memories get caught and leeches get detected.
-4. **Trust the algorithm.** If a memory keeps surfacing, it's because your retrievability is dropping. Grade it and move on — the interval will grow.
+- Ephemeral task state (use tasks for that)
+- Things that change every day (today's agenda)
+- Raw vault content that's easily searchable
+- Anything already in CLAUDE.md rules
