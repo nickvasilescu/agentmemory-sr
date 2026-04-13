@@ -311,6 +311,35 @@ Works with any agent framework that can call Python or bash:
 | **Skill file** | `agentmemory install-skill <dir>` |
 | **Hooks** | PreToolUse validation + SessionStart injection |
 
+## Roadmap
+
+**Now** — shipped, validated in production:
+- Core loop: store, retrieve, grade, review ✅
+- FSRS-6 scheduling with leech detection ✅
+- CLI with quiet mode, grade-batch ✅
+- Dual-queue context injection (new memories always visible) ✅
+- PreToolUse validation hook (blocks flag hallucination) ✅
+- Defense-in-depth: hook (100%) > CLI errors > CLAUDE.md (80%) > skill file ✅
+
+**Next** — high-impact, in progress:
+- [#1 Sonnet reliability](https://github.com/nickvasilescu/agentmemory-sr/issues/1) — Sonnet skips search step when injected context lacks the answer
+- [#2 PyPI publish](https://github.com/nickvasilescu/agentmemory-sr/issues/2) — Make `pip install agentmemory-sr` work for everyone
+- [#3 Auto-grading hook](https://github.com/nickvasilescu/agentmemory-sr/issues/3) — PostToolUse hook that grades memories when the agent uses them
+- [#9 Hermes deployment](https://github.com/nickvasilescu/agentmemory-sr/issues/9) — Real-world 24/7 validation on Mac Mini
+
+**v2** — validated direction, needs the data:
+- [#4 Vector/semantic search](https://github.com/nickvasilescu/agentmemory-sr/issues/4) — Replace FTS5 with embeddings (sqlite-vec)
+- [#5 FSRS optimizer](https://github.com/nickvasilescu/agentmemory-sr/issues/5) — Train parameters on agent grade history instead of human flashcard data
+- [#6 Implicit grading](https://github.com/nickvasilescu/agentmemory-sr/issues/6) — LLM infers grades from agent behavior
+- [#7 MCP server](https://github.com/nickvasilescu/agentmemory-sr/issues/7) — Universal agent access without CLI
+- [#8 Benchmark](https://github.com/nickvasilescu/agentmemory-sr/issues/8) — Prove SR-weighted retrieval outperforms flat search
+- [#13 Configurable learning steps](https://github.com/nickvasilescu/agentmemory-sr/issues/13) — Anki parity for graduation control
+
+**Future** — direction clear, lower priority:
+- [#10 Multi-agent sharing](https://github.com/nickvasilescu/agentmemory-sr/issues/10) — Multiple agents, one memory DB
+- [#11 Bulk import + dedup](https://github.com/nickvasilescu/agentmemory-sr/issues/11) — Context dumping resilience
+- [#12 Web dashboard](https://github.com/nickvasilescu/agentmemory-sr/issues/12) — Visual memory inspection
+
 ## Honest Caveats
 
 - **FSRS-6 was trained on human flashcard data.** We're adapting a proven algorithm to a novel domain. The scheduling parameters are human-calibrated defaults. A future optimizer could tune them for agent usage patterns, but that needs weeks of interaction data.
