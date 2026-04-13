@@ -204,7 +204,8 @@ class TestSystemPrompt:
         store.grade(store.add("graded memory").id, "good")
         prompt = store.system_prompt()
         assert "Active Memory" in prompt
-        assert "agentmemory grade" in prompt
+        assert "grade" in prompt
+        assert "id:" in prompt
 
 
 class TestUpdateDelete:

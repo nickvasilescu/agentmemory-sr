@@ -265,13 +265,14 @@ class MemoryStore:
             return ""
 
         lines = ["## Active Memory (spaced repetition)", ""]
+        lines.append("IMPORTANT: After using ANY memory below to answer a question, grade it:")
+        lines.append("`agentmemory --db ~/.agentmemory/memory.db grade <id> good`")
+        lines.append("")
         for m in top:
             r = get_retrievability(self.scheduler, m)
             strength = "strong" if r > 0.8 else "fading" if r > 0.5 else "weak"
-            lines.append(f"- [{m.namespace}] {m.content} ({strength})")
+            lines.append(f"- (id:{m.id}) [{m.namespace}] {m.content} ({strength})")
 
-        lines.append("")
-        lines.append("Use `agentmemory grade <id> good|again` after using a memory.")
         return "\n".join(lines)
 
     def health(self) -> HealthReport:
